@@ -18,21 +18,6 @@ const (
 	argumentsDialogID dialogs.DialogID = "arguments"
 )
 
-// ShowArgumentsDialogMsg is a message that is sent to show the arguments dialog.
-type ShowArgumentsDialogMsg struct {
-	CommandID string
-	Content   string
-	ArgNames  []string
-}
-
-// CloseArgumentsDialogMsg is a message that is sent when the arguments dialog is closed.
-type CloseArgumentsDialogMsg struct {
-	Submit    bool
-	CommandID string
-	Content   string
-	Args      map[string]string
-}
-
 // CommandArgumentsDialog represents the commands dialog.
 type CommandArgumentsDialog interface {
 	dialogs.DialogModel
@@ -109,7 +94,7 @@ func (c *commandArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return c, tea.Sequence(
 					util.CmdHandler(dialogs.CloseDialogMsg{}),
-					util.CmdHandler(CommandRunCustomMsg{
+					util.CmdHandler(util.CommandRunCustomMsg{
 						Content: content,
 					}),
 				)

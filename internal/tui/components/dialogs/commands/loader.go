@@ -153,14 +153,14 @@ func createCommandHandler(id string, content string) func(Command) tea.Cmd {
 		args := extractArgNames(content)
 
 		if len(args) > 0 {
-			return util.CmdHandler(ShowArgumentsDialogMsg{
+			return util.CmdHandler(util.ShowArgumentsDialogMsg{
 				CommandID: id,
 				Content:   content,
 				ArgNames:  args,
 			})
 		}
 
-		return util.CmdHandler(CommandRunCustomMsg{
+		return util.CmdHandler(util.CommandRunCustomMsg{
 			Content: content,
 		})
 	}

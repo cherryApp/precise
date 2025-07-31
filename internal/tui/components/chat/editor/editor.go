@@ -23,7 +23,6 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
-	"github.com/charmbracelet/crush/internal/tui/components/dialogs/commands"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/quit"
 	"github.com/charmbracelet/crush/internal/tui/styles"
@@ -41,8 +40,11 @@ type Editor interface {
 	SetSession(session session.Session) tea.Cmd
 	IsCompletionsOpen() bool
 	HasAttachments() bool
+	SetText(string)
 	Cursor() *tea.Cursor
 }
+
+type OpenExternalEditorMsg struct{}
 
 type FileCompletionItem struct {
 	Path string // The file path
@@ -216,7 +218,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case commands.OpenExternalEditorMsg:
+	case OpenExternalEditorMsg:
 		if m.app.CoderAgent.IsSessionBusy(m.session.ID) {
 			return m, util.ReportWarn("Agent is working, please wait...")
 		}
@@ -384,6 +386,11 @@ func (m *editorCmp) Cursor() *tea.Cursor {
 		cursor.Y = cursor.Y + m.y + 1 // adjust for padding
 	}
 	return cursor
+}
+
+func (m *editorCmp) SetText(s string) {
+	m.textarea.SetValue(s)
+	m.textarea.MoveToEnd()
 }
 
 var readyPlaceholders = [...]string{

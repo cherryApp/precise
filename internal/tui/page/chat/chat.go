@@ -24,7 +24,6 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
-	"github.com/charmbracelet/crush/internal/tui/components/dialogs/commands"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/models"
 	"github.com/charmbracelet/crush/internal/tui/page"
@@ -35,13 +34,6 @@ import (
 )
 
 var ChatPageID page.PageID = "chat"
-
-type (
-	ChatFocusedMsg struct {
-		Focused bool
-	}
-	CancelTimerExpiredMsg struct{}
-)
 
 type PanelType string
 
@@ -78,7 +70,7 @@ type ChatPage interface {
 // cancelTimerCmd creates a command that expires the cancel timer
 func cancelTimerCmd() tea.Cmd {
 	return tea.Tick(CancelTimerDuration, func(time.Time) tea.Msg {
-		return CancelTimerExpiredMsg{}
+		return util.CancelTimerExpiredMsg{}
 	})
 }
 
@@ -175,7 +167,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		u, cmd := p.editor.Update(msg)
 		p.editor = u.(editor.Editor)
 		return p, tea.Batch(p.SetSize(msg.Width, msg.Height), cmd)
-	case CancelTimerExpiredMsg:
+	case util.CancelTimerExpiredMsg:
 		p.isCanceling = false
 		return p, nil
 	case editor.OpenEditorMsg:
@@ -191,7 +183,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.splash = u.(splash.Splash)
 		cmds = append(cmds, cmd)
 		return p, tea.Batch(cmds...)
-	case commands.ToggleCompactModeMsg:
+	case util.ToggleCompactModeMsg:
 		p.forceCompact = !p.forceCompact
 		var cmd tea.Cmd
 		if p.forceCompact {
@@ -202,9 +194,9 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = p.updateCompactConfig(false)
 		}
 		return p, tea.Batch(p.SetSize(p.width, p.height), cmd)
-	case commands.ToggleThinkingMsg:
+	case util.ToggleThinkingMsg:
 		return p, p.toggleThinking()
-	case commands.OpenExternalEditorMsg:
+	case editor.OpenExternalEditorMsg:
 		u, cmd := p.editor.Update(msg)
 		p.editor = u.(editor.Editor)
 		return p, cmd
@@ -268,7 +260,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return p, tea.Batch(cmds...)
 
-	case commands.CommandRunCustomMsg:
+	case util.CommandRunCustomMsg:
 		if p.app.CoderAgent.IsBusy() {
 			return p, util.ReportWarn("Agent is busy, please wait before executing a command...")
 		}
@@ -292,7 +284,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.isProjectInit = false
 		p.focusedPane = PanelTypeEditor
 		return p, p.SetSize(p.width, p.height)
-	case commands.NewSessionsMsg:
+	case util.NewSessionsMsg:
 		if p.app.CoderAgent.IsBusy() {
 			return p, util.ReportWarn("Agent is busy, please wait before starting a new session...")
 		}
@@ -308,7 +300,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			agentCfg := config.Get().Agents["coder"]
 			model := config.Get().GetModelByType(agentCfg.Model)
 			if model.SupportsImages {
-				return p, util.CmdHandler(commands.OpenFilePickerMsg{})
+				return p, util.CmdHandler(util.OpenFilePickerMsg{})
 			} else {
 				return p, util.ReportWarn("File attachments are not supported by the current model: " + model.Name)
 			}
@@ -327,6 +319,8 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, p.keyMap.Details):
 			p.toggleDetails()
 			return p, nil
+		case key.Matches(msg, p.keyMap.ReloadLastPrompt):
+			return p, util.CmdHandler(util.ReloadLastPromptMsg{})
 		}
 
 		switch p.focusedPane {
@@ -361,6 +355,23 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return p, tea.Batch(cmds...)
 		}
+	case util.ReloadLastPromptMsg:
+		if p.session.ID == "" {
+			return p, nil
+		}
+		msgs, err := p.app.Messages.List(context.Background(), p.session.ID)
+		if err != nil {
+			return p, util.ReportError(err)
+		}
+		var lastPrompt string
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == message.User {
+				lastPrompt = msgs[i].Content().Text
+				break
+			}
+		}
+		p.editor.SetText(lastPrompt)
+		return p, nil
 	}
 	return p, tea.Batch(cmds...)
 }
@@ -820,6 +831,7 @@ func (p *chatPage) Help() help.KeyMap {
 					key.WithKeys("ctrl+n"),
 					key.WithHelp("ctrl+n", "new sessions"),
 				))
+			globalBindings = append(globalBindings, p.keyMap.ReloadLastPrompt)
 		}
 		shortList = append(shortList,
 			// Commands

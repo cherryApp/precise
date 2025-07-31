@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/core"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
 	"github.com/charmbracelet/crush/internal/tui/exp/list"
+	"github.com/charmbracelet/crush/internal/tui/components/chat/editor"
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 )
@@ -58,21 +59,6 @@ type commandDialogCmp struct {
 	userCommands []Command // User-defined commands
 	sessionID    string    // Current session ID
 }
-
-type (
-	SwitchSessionsMsg     struct{}
-	NewSessionsMsg        struct{}
-	SwitchModelMsg        struct{}
-	QuitMsg               struct{}
-	OpenFilePickerMsg     struct{}
-	ToggleHelpMsg         struct{}
-	ToggleCompactModeMsg  struct{}
-	ToggleThinkingMsg     struct{}
-	OpenExternalEditorMsg struct{}
-	CompactMsg            struct {
-		SessionID string
-	}
-)
 
 func NewCommandDialog(sessionID string) CommandsDialog {
 	keyMap := DefaultCommandsDialogKeyMap()
@@ -260,7 +246,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Description: "start a new session",
 			Shortcut:    "ctrl+n",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(NewSessionsMsg{})
+				return util.CmdHandler(util.NewSessionsMsg{})
 			},
 		},
 		{
@@ -269,7 +255,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Description: "Switch to a different session",
 			Shortcut:    "ctrl+s",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(SwitchSessionsMsg{})
+				return util.CmdHandler(util.SwitchSessionsMsg{})
 			},
 		},
 		{
@@ -277,7 +263,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Title:       "Switch Model",
 			Description: "Switch to a different model",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(SwitchModelMsg{})
+				return util.CmdHandler(util.SwitchModelMsg{})
 			},
 		},
 	}
@@ -285,11 +271,19 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 	// Only show compact command if there's an active session
 	if c.sessionID != "" {
 		commands = append(commands, Command{
+			ID:          "reload_last_prompt",
+			Title:       "Reload Last Prompt",
+			Description: "Reload the last prompt into the prompt editor",
+			Handler: func(cmd Command) tea.Cmd {
+				return util.CmdHandler(util.ReloadLastPromptMsg{})
+			},
+		})
+		commands = append(commands, Command{
 			ID:          "Summarize",
 			Title:       "Summarize Session",
 			Description: "Summarize the current session and create a new one with the summary",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(CompactMsg{
+				return util.CmdHandler(util.CompactMsg{
 					SessionID: c.sessionID,
 				})
 			},
@@ -313,7 +307,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 				Title:       status + " Thinking Mode",
 				Description: "Toggle model thinking for reasoning-capable models",
 				Handler: func(cmd Command) tea.Cmd {
-					return util.CmdHandler(ToggleThinkingMsg{})
+					return util.CmdHandler(util.ToggleThinkingMsg{})
 				},
 			})
 		}
@@ -326,7 +320,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Title:       "Toggle Sidebar",
 			Description: "Toggle between compact and normal layout",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(ToggleCompactModeMsg{})
+				return util.CmdHandler(util.ToggleCompactModeMsg{})
 			},
 		})
 	}
@@ -340,7 +334,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 				Shortcut:    "ctrl+f",
 				Description: "Open file picker",
 				Handler: func(cmd Command) tea.Cmd {
-					return util.CmdHandler(OpenFilePickerMsg{})
+					return util.CmdHandler(util.OpenFilePickerMsg{})
 				},
 			})
 		}
@@ -354,7 +348,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Shortcut:    "ctrl+o",
 			Description: "Open external editor to compose message",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(OpenExternalEditorMsg{})
+				return util.CmdHandler(editor.OpenExternalEditorMsg{})
 			},
 		})
 	}
@@ -366,7 +360,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Shortcut:    "ctrl+g",
 			Description: "Toggle help",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(ToggleHelpMsg{})
+				return util.CmdHandler(util.ToggleHelpMsg{})
 			},
 		},
 		{
@@ -385,7 +379,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Description: "Quit",
 			Shortcut:    "ctrl+c",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(QuitMsg{})
+				return util.CmdHandler(util.QuitMsg{})
 			},
 		},
 	}...)

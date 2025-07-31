@@ -59,6 +59,36 @@ type (
 		TTL  time.Duration
 	}
 	ClearStatusMsg struct{}
+	ChatFocusedMsg struct {
+		Focused bool
+	}
+	ReloadLastPromptMsg struct{}
+	SwitchSessionsMsg     struct{}
+	NewSessionsMsg        struct{}
+	SwitchModelMsg        struct{}
+	QuitMsg               struct{}
+	OpenFilePickerMsg     struct{}
+	ToggleHelpMsg         struct{}
+	ToggleCompactModeMsg  struct{}
+	ToggleThinkingMsg     struct{}
+	CompactMsg            struct {
+		SessionID string
+	}
+	CommandRunCustomMsg struct {
+		Content string
+	}
+	ShowArgumentsDialogMsg struct {
+		CommandID string
+		Content   string
+		ArgNames  []string
+	}
+	CloseArgumentsDialogMsg struct {
+		Submit    bool
+		CommandID string
+		Content   string
+		Args      map[string]string
+	}
+	CancelTimerExpiredMsg struct{}
 )
 
 func Clamp(v, low, high int) int {

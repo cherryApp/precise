@@ -124,7 +124,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		u, dialogCmd := a.dialog.Update(msg)
 		a.dialog = u.(dialogs.DialogCmp)
 		return a, tea.Batch(completionCmd, dialogCmd)
-	case commands.ShowArgumentsDialogMsg:
+	case util.ShowArgumentsDialogMsg:
 		return a, util.CmdHandler(
 			dialogs.OpenDialogMsg{
 				Model: commands.NewCommandArgumentsDialog(
@@ -151,7 +151,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case cmpChat.SessionClearedMsg:
 		a.selectedSessionID = ""
 	// Commands
-	case commands.SwitchSessionsMsg:
+	case util.SwitchSessionsMsg:
 		return a, func() tea.Msg {
 			allSessions, _ := a.app.Sessions.List(context.Background())
 			return dialogs.OpenDialogMsg{
@@ -159,22 +159,22 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case commands.SwitchModelMsg:
+	case util.SwitchModelMsg:
 		return a, util.CmdHandler(
 			dialogs.OpenDialogMsg{
 				Model: models.NewModelDialogCmp(),
 			},
 		)
 	// Compact
-	case commands.CompactMsg:
+	case util.CompactMsg:
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: compact.NewCompactDialogCmp(a.app.CoderAgent, msg.SessionID, true),
 		})
-	case commands.QuitMsg:
+	case util.QuitMsg:
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: quit.NewQuitDialog(),
 		})
-	case commands.ToggleHelpMsg:
+	case util.ToggleHelpMsg:
 		a.status.ToggleFullHelp()
 		a.showingFullHelp = !a.showingFullHelp
 		return a, a.handleWindowResize(a.wWidth, a.wHeight)
@@ -197,7 +197,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, util.ReportInfo(fmt.Sprintf("%s model changed to %s", modelTypeName, msg.Model.Model))
 
 	// File Picker
-	case commands.OpenFilePickerMsg:
+	case util.OpenFilePickerMsg:
 		if a.dialog.ActiveDialogID() == filepicker.FilePickerID {
 			// If the commands dialog is already open, close it
 			return a, util.CmdHandler(dialogs.CloseDialogMsg{})

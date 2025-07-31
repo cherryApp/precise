@@ -95,10 +95,6 @@ aur_sources:
       - "caarlos0 <carlos@charm.sh>"
     license: "FSL-1.1-MIT"
 
-    provides:
-      - crush
-    conflicts:
-      - crush
     depends:
       - git
     makedepends:

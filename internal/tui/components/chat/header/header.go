@@ -62,9 +62,9 @@ func (p *header) View() string {
 	t := styles.CurrentTheme()
 	details := p.details()
 	parts := []string{
-		t.S().Base.Foreground(t.Secondary).Render("Charm™"),
+		t.S().Base.Foreground(t.Secondary).Render("CherryApp"),
 		" ",
-		styles.ApplyBoldForegroundGrad("CRUSH", t.Secondary, t.Primary),
+		styles.ApplyBoldForegroundGrad("Precise powered by CRUSH", t.Secondary, t.Primary),
 		" ",
 	}
 

@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -112,7 +113,7 @@ func (m *editorCmp) openEditor(value string) tea.Cmd {
 	if _, err := tmpfile.WriteString(value); err != nil {
 		return util.ReportError(err)
 	}
-	c := exec.Command(editor, tmpfile.Name())
+	c := exec.CommandContext(context.TODO(), editor, tmpfile.Name())
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
@@ -417,7 +418,7 @@ func (m *editorCmp) randomizePlaceholders() {
 func (m *editorCmp) View() string {
 	t := styles.CurrentTheme()
 	// Update placeholder
-	if m.app.CoderAgent.IsBusy() {
+	if m.app.CoderAgent != nil && m.app.CoderAgent.IsBusy() {
 		m.textarea.Placeholder = m.workingPlaceholder
 	} else {
 		m.textarea.Placeholder = m.readyPlaceholder

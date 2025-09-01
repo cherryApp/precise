@@ -494,7 +494,14 @@ func (o *openaiClient) shouldRetry(attempts int, err error) (bool, int64, error)
 	var apiErr *openai.Error
 	retryMs := 0
 	retryAfterValues := []string{}
+
 	if errors.As(err, &apiErr) {
+		// LmStudio API 429 handling patch
+		if apiErr.StatusCode == 429 {
+			// LM Studio often sends 429 incorrectly, so skip retry
+			return false, 0, nil
+		}
+
 		// Check for token expiration (401 Unauthorized)
 		if apiErr.StatusCode == 401 {
 			o.providerOptions.apiKey, err = config.Get().Resolve(o.providerOptions.config.APIKey)

@@ -3,7 +3,6 @@ package sidebar
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -12,7 +11,9 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/diff"
+	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/history"
+	"github.com/charmbracelet/crush/internal/home"
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
@@ -190,8 +191,8 @@ func (m *sidebarCmp) handleFileHistoryEvent(event pubsub.Event[history.File]) te
 				// If the version is not greater than the latest, we ignore it
 				continue
 			}
-			before := existing.History.initialVersion.Content
-			after := existing.History.latestVersion.Content
+			before, _ := fsext.ToUnixLineEndings(existing.History.initialVersion.Content)
+			after, _ := fsext.ToUnixLineEndings(existing.History.latestVersion.Content)
 			path := existing.History.initialVersion.Path
 			cwd := config.Get().WorkingDir()
 			path = strings.TrimPrefix(path, cwd)
@@ -248,7 +249,9 @@ func (m *sidebarCmp) loadSessionFiles() tea.Msg {
 	for path, fh := range fileMap {
 		cwd := config.Get().WorkingDir()
 		path = strings.TrimPrefix(path, cwd)
-		_, additions, deletions := diff.GenerateDiff(fh.initialVersion.Content, fh.latestVersion.Content, path)
+		before, _ := fsext.ToUnixLineEndings(fh.initialVersion.Content)
+		after, _ := fsext.ToUnixLineEndings(fh.latestVersion.Content)
+		_, additions, deletions := diff.GenerateDiff(before, after, path)
 		sessionFiles = append(sessionFiles, SessionFile{
 			History:   fh,
 			FilePath:  path,
@@ -606,11 +609,5 @@ func (m *sidebarCmp) SetCompactMode(compact bool) {
 func cwd() string {
 	cwd := config.Get().WorkingDir()
 	t := styles.CurrentTheme()
-	// Replace home directory with ~, unless we're at the top level of the
-	// home directory).
-	homeDir, err := os.UserHomeDir()
-	if err == nil && cwd != homeDir {
-		cwd = strings.ReplaceAll(cwd, homeDir, "~")
-	}
-	return t.S().Muted.Render(cwd)
+	return t.S().Muted.Render(home.Short(cwd))
 }

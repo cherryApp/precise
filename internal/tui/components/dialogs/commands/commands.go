@@ -12,10 +12,10 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/llm/prompt"
 	"github.com/charmbracelet/crush/internal/tui/components/chat"
+	"github.com/charmbracelet/crush/internal/tui/components/chat/editor"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
 	"github.com/charmbracelet/crush/internal/tui/exp/list"
-	"github.com/charmbracelet/crush/internal/tui/components/chat/editor"
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 )
@@ -59,6 +59,22 @@ type commandDialogCmp struct {
 	userCommands []Command // User-defined commands
 	sessionID    string    // Current session ID
 }
+
+type (
+	SwitchSessionsMsg     struct{}
+	NewSessionsMsg        struct{}
+	SwitchModelMsg        struct{}
+	QuitMsg               struct{}
+	OpenFilePickerMsg     struct{}
+	ToggleHelpMsg         struct{}
+	ToggleCompactModeMsg  struct{}
+	ToggleThinkingMsg     struct{}
+	OpenExternalEditorMsg struct{}
+	ToggleYoloModeMsg     struct{}
+	CompactMsg            struct {
+		SessionID string
+	}
+)
 
 func NewCommandDialog(sessionID string) CommandsDialog {
 	keyMap := DefaultCommandsDialogKeyMap()
@@ -356,6 +372,14 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 	}
 
 	return append(commands, []Command{
+		{
+			ID:          "toggle_yolo",
+			Title:       "Toggle Yolo Mode",
+			Description: "Toggle yolo mode",
+			Handler: func(cmd Command) tea.Cmd {
+				return util.CmdHandler(ToggleYoloModeMsg{})
+			},
+		},
 		{
 			ID:          "toggle_help",
 			Title:       "Toggle Help",

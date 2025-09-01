@@ -70,7 +70,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 			}
 			history = append(history, &genai.Content{
 				Parts: parts,
-				Role:  "user",
+				Role:  genai.RoleUser,
 			})
 		case message.Assistant:
 			var assistantParts []*genai.Part
@@ -81,6 +81,9 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 
 			if len(msg.ToolCalls()) > 0 {
 				for _, call := range msg.ToolCalls() {
+					if !call.Finished {
+						continue
+					}
 					args, _ := parseJSONToMap(call.Input)
 					assistantParts = append(assistantParts, &genai.Part{
 						FunctionCall: &genai.FunctionCall{
@@ -93,7 +96,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 
 			if len(assistantParts) > 0 {
 				history = append(history, &genai.Content{
-					Role:  "model",
+					Role:  genai.RoleModel,
 					Parts: assistantParts,
 				})
 			}
@@ -127,7 +130,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 							},
 						},
 					},
-					Role: "function",
+					Role: genai.RoleModel,
 				})
 			}
 		}
@@ -216,7 +219,7 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 				return nil, retryErr
 			}
 			if retry {
-				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries, "error", err)
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -327,7 +330,7 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 						return
 					}
 					if retry {
-						slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+						slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries, "error", err)
 						select {
 						case <-ctx.Done():
 							if ctx.Err() != nil {
@@ -336,7 +339,7 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 
 							return
 						case <-time.After(time.Duration(after) * time.Millisecond):
-							break
+							continue
 						}
 					} else {
 						eventChan <- ProviderEvent{Type: EventError, Error: err}

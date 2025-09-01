@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/charmbracelet/crush/internal/home"
 )
 
 type ProviderClient interface {
@@ -41,7 +42,7 @@ func providerCacheFileData() string {
 		return filepath.Join(localAppData, appName, "providers.json")
 	}
 
-	return filepath.Join(os.Getenv("HOME"), ".local", "share", appName, "providers.json")
+	return filepath.Join(home.Dir(), ".local", "share", appName, "providers.json")
 }
 
 func saveProvidersInCache(path string, providers []catwalk.Provider) error {
@@ -100,7 +101,7 @@ func loadProviders(client ProviderClient, path string) (providerList []catwalk.P
 		providerList, err = loadProvidersFromCache(path)
 		if len(providerList) > 0 && err == nil {
 			go func() {
-				slog.Info("Updating provider cache in background")
+				slog.Info("Updating provider cache in background", "path", path)
 				updated, uerr := client.GetProviders()
 				if len(updated) > 0 && uerr == nil {
 					_ = saveProvidersInCache(path, updated)
@@ -110,7 +111,7 @@ func loadProviders(client ProviderClient, path string) (providerList []catwalk.P
 		}
 	}
 
-	slog.Info("Getting live provider data")
+	slog.Info("Getting live provider data", "path", path)
 	providerList, err = client.GetProviders()
 	if len(providerList) > 0 && err == nil {
 		err = saveProvidersInCache(path, providerList)
@@ -120,6 +121,7 @@ func loadProviders(client ProviderClient, path string) (providerList []catwalk.P
 		err = fmt.Errorf("failed to load providers")
 		return
 	}
+	slog.Info("Loading provider data from cache", "path", path)
 	providerList, err = loadProvidersFromCache(path)
 	return
 }

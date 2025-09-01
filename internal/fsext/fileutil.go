@@ -10,6 +10,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charlievieth/fastwalk"
+	"github.com/charmbracelet/crush/internal/home"
 
 	ignore "github.com/sabhiram/go-gitignore"
 )
@@ -182,12 +183,7 @@ func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, 
 }
 
 func PrettyPath(path string) string {
-	// replace home directory with ~
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		path = strings.ReplaceAll(path, homeDir, "~")
-	}
-	return path
+	return home.Short(path)
 }
 
 func DirTrim(pwd string, lim int) string {
@@ -232,4 +228,20 @@ func HasPrefix(path, prefix string) bool {
 	}
 	// If path is within prefix, Rel will not return a path starting with ".."
 	return !strings.HasPrefix(rel, "..")
+}
+
+// ToUnixLineEndings converts Windows line endings (CRLF) to Unix line endings (LF).
+func ToUnixLineEndings(content string) (string, bool) {
+	if strings.Contains(content, "\r\n") {
+		return strings.ReplaceAll(content, "\r\n", "\n"), true
+	}
+	return content, false
+}
+
+// ToWindowsLineEndings converts Unix line endings (LF) to Windows line endings (CRLF).
+func ToWindowsLineEndings(content string) (string, bool) {
+	if !strings.Contains(content, "\r\n") {
+		return strings.ReplaceAll(content, "\n", "\r\n"), true
+	}
+	return content, false
 }

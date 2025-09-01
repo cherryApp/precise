@@ -37,6 +37,17 @@ yay -S crush-bin
 nix run github:numtide/nix-ai-tools#crush
 ```
 
+Windows users:
+
+```bash
+# Winget
+winget install charmbracelet.crush
+
+# Scoop
+scoop bucket add charm https://github.com/charmbracelet/scoop-bucket.git
+scoop install crush
+```
+
 <details>
 <summary><strong>Nix (NUR)</strong></summary>
 
@@ -128,7 +139,7 @@ That said, you can also set environment variables for preferred providers.
 
 Is there a provider you’d like to see in Crush? Is there an existing model that needs an update?
 
-Crush’s default model listing is managed in [Catwalk](https://github.com/charmbracelet/catwalk), an community-supported, open source repository of Crush-compatible models, and you’re welcome to contribute.
+Crush’s default model listing is managed in [Catwalk](https://github.com/charmbracelet/catwalk), a community-supported, open source repository of Crush-compatible models, and you’re welcome to contribute.
 
 <a href="https://github.com/charmbracelet/catwalk"><img width="174" height="174" alt="Catwalk Badge" src="https://github.com/user-attachments/assets/95b49515-fe82-4409-b10d-5beb0873787d" /></a>
 
@@ -155,7 +166,7 @@ As an additional note, Crush also stores ephemeral data, such as application sta
 
 ```bash
 # Unix
-$HOME/.local/shared/crush/crush.json
+$HOME/.local/share/crush/crush.json
 
 # Windows
 %LOCALAPPDATA%\crush\crush.json
@@ -171,7 +182,10 @@ like you would. LSPs can be added manually like so:
   "$schema": "https://charm.land/crush.json",
   "lsp": {
     "go": {
-      "command": "gopls"
+      "command": "gopls",
+      "env": {
+        "GOTOOLCHAIN": "go1.24.5"
+      }
     },
     "typescript": {
       "command": "typescript-language-server",
@@ -277,6 +291,7 @@ Local models can also be configured via OpenAI-compatible API. Here are two comm
         }
       ]
     }
+  }
 }
 ```
 
@@ -413,6 +428,17 @@ To add specific models to the configuration, configure as such:
 }
 ```
 
+## A Note on Claude Max and GitHub Copilot
+
+Crush only supports model providers through official, compliant APIs. We do not
+support or endorse any methods that rely on personal Claude Max and GitHub Copilot
+accounts or OAuth workarounds, which may violate Anthropic and Microsoft’s
+Terms of Service.
+
+We’re committed to building sustainable, trusted integrations with model
+providers. If you’re a provider interested in working with us,
+[reach out](mailto:vt100@charm.sh).
+
 ## Logging
 
 Sometimes you need to look at logs. Luckily, Crush logs all sorts of
@@ -457,7 +483,7 @@ We’d love to hear your thoughts on this project. Need help? We gotchu. You can
 
 ## License
 
-[FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE)
+[FSL-1.1-MIT](https://github.com/charmbracelet/crush/raw/main/LICENSE.md)
 
 ---
 

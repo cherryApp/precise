@@ -79,6 +79,13 @@ func createAnthropicClient(opts providerClientOptions, tp AnthropicClientType) a
 		slog.Debug("Skipping X-Api-Key header because Authorization header is provided")
 	}
 
+	if opts.baseURL != "" {
+		resolvedBaseURL, err := config.Get().Resolve(opts.baseURL)
+		if err == nil && resolvedBaseURL != "" {
+			anthropicClientOptions = append(anthropicClientOptions, option.WithBaseURL(resolvedBaseURL))
+		}
+	}
+
 	if config.Get().Options.Debug {
 		httpClient := log.NewHTTPClient()
 		anthropicClientOptions = append(anthropicClientOptions, option.WithHTTPClient(httpClient))
@@ -144,6 +151,9 @@ func (a *anthropicClient) convertMessages(messages []message.Message) (anthropic
 			}
 
 			for _, toolCall := range msg.ToolCalls() {
+				if !toolCall.Finished {
+					continue
+				}
 				var inputMap map[string]any
 				err := json.Unmarshal([]byte(toolCall.Input), &inputMap)
 				if err != nil {
@@ -153,7 +163,6 @@ func (a *anthropicClient) convertMessages(messages []message.Message) (anthropic
 			}
 
 			if len(blocks) == 0 {
-				slog.Warn("There is a message without content, investigate, this should not happen")
 				continue
 			}
 			anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(blocks...))
@@ -170,6 +179,9 @@ func (a *anthropicClient) convertMessages(messages []message.Message) (anthropic
 }
 
 func (a *anthropicClient) convertTools(tools []tools.BaseTool) []anthropic.ToolUnionParam {
+	if len(tools) == 0 {
+		return nil
+	}
 	anthropicTools := make([]anthropic.ToolUnionParam, len(tools))
 
 	for i, tool := range tools {
@@ -179,7 +191,7 @@ func (a *anthropicClient) convertTools(tools []tools.BaseTool) []anthropic.ToolU
 			Description: anthropic.String(info.Description),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: info.Parameters,
-				// TODO: figure out how we can tell claude the required fields?
+				Required:   info.Required,
 			},
 		}
 
@@ -253,9 +265,6 @@ func (a *anthropicClient) preparedMessages(messages []anthropic.MessageParam, to
 	if a.providerOptions.systemPromptPrefix != "" {
 		systemBlocks = append(systemBlocks, anthropic.TextBlockParam{
 			Text: a.providerOptions.systemPromptPrefix,
-			CacheControl: anthropic.CacheControlEphemeralParam{
-				Type: "ephemeral",
-			},
 		})
 	}
 
@@ -295,13 +304,12 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 		)
 		// If there is an error we are going to see if we can retry the call
 		if err != nil {
-			slog.Error("Anthropic API error", "error", err.Error(), "attempt", attempts, "max_retries", maxRetries)
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
 				return nil, retryErr
 			}
 			if retry {
-				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries, "error", err)
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -450,7 +458,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 				return
 			}
 			if retry {
-				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries, "error", err)
 				select {
 				case <-ctx.Done():
 					// context cancelled

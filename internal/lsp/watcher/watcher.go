@@ -387,6 +387,10 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 				return
 			}
 
+			if !w.client.HandlesFile(event.Name) {
+				continue // client doesn't handle this filetype
+			}
+
 			uri := string(protocol.URIFromPath(event.Name))
 
 			// Add new directories to the watcher
@@ -431,8 +435,11 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 					// Just send the notification if needed
 					info, err := os.Stat(event.Name)
 					if err != nil {
-						slog.Error("Error getting file info", "path", event.Name, "error", err)
-						return
+						if !os.IsNotExist(err) {
+							// Only log if it's not a "file not found" error
+							slog.Debug("Error getting file info", "path", event.Name, "error", err)
+						}
+						continue
 					}
 					if !info.IsDir() && watchKind&protocol.WatchCreate != 0 {
 						w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Created))
@@ -616,18 +623,11 @@ func (w *WorkspaceWatcher) matchesPattern(path string, pattern protocol.GlobPatt
 	if basePath == "" {
 		return false
 	}
-	// For relative patterns
-	if basePath, err = protocol.DocumentURI(basePath).Path(); err != nil {
-		// XXX: Do we want to return here, or send the error up the stack?
-		slog.Error("Error converting base path to URI", "basePath", basePath, "error", err)
-	}
-
-	basePath = filepath.ToSlash(basePath)
 
 	// Make path relative to basePath for matching
 	relPath, err := filepath.Rel(basePath, path)
 	if err != nil {
-		slog.Error("Error getting relative path", "path", path, "basePath", basePath, "error", err)
+		slog.Error("Error getting relative path", "path", path, "basePath", basePath, "error", err, "server", w.name)
 		return false
 	}
 	relPath = filepath.ToSlash(relPath)
@@ -801,6 +801,7 @@ func shouldExcludeDir(dirPath string) bool {
 func shouldExcludeFile(filePath string) bool {
 	fileName := filepath.Base(filePath)
 	cfg := config.Get()
+
 	// Skip dot files
 	if strings.HasPrefix(fileName, ".") {
 		return true
@@ -812,12 +813,6 @@ func shouldExcludeFile(filePath string) bool {
 		return true
 	}
 
-	// Skip temporary files
-	if strings.HasSuffix(filePath, "~") {
-		return true
-	}
-
-	// Check file size
 	info, err := os.Stat(filePath)
 	if err != nil {
 		// If we can't stat the file, skip it

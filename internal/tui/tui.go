@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
 	"github.com/charmbracelet/crush/internal/tui/components/core/status"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
+	"github.com/charmbracelet/crush/internal/tui/components/dialogs/clear"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/commands"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/compact"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
@@ -181,11 +182,13 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: compact.NewCompactDialogCmp(a.app.CoderAgent, msg.SessionID, true),
 		})
+	case util.ClearContextMsg:
+		return a, a.handleClearContextConfirmed(msg.SessionID)
 	case util.QuitMsg:
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: quit.NewQuitDialog(),
 		})
-	case commands.ToggleYoloModeMsg:
+	case util.ToggleYoloModeMsg:
 		a.app.Permissions.SetSkipRequests(!a.app.Permissions.SkipRequests())
 	case commands.ToggleHelpMsg:
 		a.status.ToggleFullHelp()
@@ -402,6 +405,52 @@ func (a *appModel) handleWindowResize(width, height int) tea.Cmd {
 	cmds = append(cmds, cmd)
 
 	return tea.Batch(cmds...)
+}
+
+// handleClearContext processes the clear context command by showing a confirmation dialog.
+func (a *appModel) handleClearContext(sessionID string) tea.Cmd {
+	if sessionID == "" {
+		return util.ReportWarn("No active session to clear")
+	}
+	return util.CmdHandler(dialogs.OpenDialogMsg{
+		Model: clear.NewClearContextDialog(sessionID),
+	})
+}
+
+// handleClearContextConfirmed actually clears all messages from the session and resets token counts.
+func (a *appModel) handleClearContextConfirmed(sessionID string) tea.Cmd {
+	if sessionID == "" {
+		return util.ReportWarn("No active session to clear")
+	}
+
+	// Clear all messages from the session
+	err := a.app.Messages.DeleteSessionMessages(context.Background(), sessionID)
+	if err != nil {
+		return util.ReportError(fmt.Errorf("failed to clear messages: %w", err))
+	}
+
+	// Reset session token counts to 0
+	session, err := a.app.Sessions.Get(context.Background(), sessionID)
+	if err != nil {
+		return util.ReportError(fmt.Errorf("failed to get session: %w", err))
+	}
+
+	// Reset token counts and cost
+	session.PromptTokens = 0
+	session.CompletionTokens = 0
+	session.Cost = 0
+	session.MessageCount = 0
+
+	// Save the updated session
+	_, err = a.app.Sessions.Save(context.Background(), session)
+	if err != nil {
+		return util.ReportError(fmt.Errorf("failed to update session: %w", err))
+	}
+
+	return tea.Sequence(
+		util.ReportInfo("Context cleared successfully"),
+		util.CmdHandler(cmpChat.SessionClearedMsg{}),
+	)
 }
 
 // handleKeyPressMsg processes keyboard input and routes to appropriate handlers.

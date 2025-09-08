@@ -258,7 +258,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Attachment: attachment,
 		})
 
-	case commands.ToggleYoloModeMsg:
+	case util.ToggleYoloModeMsg:
 		m.setEditorPrompt()
 		return m, nil
 	case tea.KeyPressMsg:

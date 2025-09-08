@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/charmbracelet/crush/internal/config/config",
   "$ref": "#/$defs/Config",
   "$defs": {
@@ -344,6 +343,10 @@
         "system_prompt_prefix": {
           "type": "string",
           "description": "Custom prefix to add to system prompts for this provider"
+        },
+        "system_prompt_prefix_path": {
+          "type": "string",
+          "description": "File path containing custom prefix to add to system prompts for this provider"
         },
         "extra_headers": {
           "additionalProperties": {

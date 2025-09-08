@@ -70,7 +70,6 @@ type (
 	ToggleCompactModeMsg  struct{}
 	ToggleThinkingMsg     struct{}
 	OpenExternalEditorMsg struct{}
-	ToggleYoloModeMsg     struct{}
 	CompactMsg            struct {
 		SessionID string
 	}
@@ -307,6 +306,16 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 				})
 			},
 		})
+		commands = append(commands, Command{
+			ID:          "clear_context",
+			Title:       "Clear Context",
+			Description: "Clear all messages from the current session",
+			Handler: func(cmd Command) tea.Cmd {
+				return util.CmdHandler(util.ClearContextMsg{
+					SessionID: c.sessionID,
+				})
+			},
+		})
 	}
 
 	// Only show thinking toggle for Anthropic models that can reason
@@ -377,7 +386,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 			Title:       "Toggle Yolo Mode",
 			Description: "Toggle yolo mode",
 			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(ToggleYoloModeMsg{})
+				return util.CmdHandler(util.ToggleYoloModeMsg{})
 			},
 		},
 		{

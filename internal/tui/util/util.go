@@ -62,16 +62,20 @@ type (
 	ChatFocusedMsg struct {
 		Focused bool
 	}
-	ReloadLastPromptMsg struct{}
-	SwitchSessionsMsg     struct{}
-	NewSessionsMsg        struct{}
-	SwitchModelMsg        struct{}
-	QuitMsg               struct{}
-	OpenFilePickerMsg     struct{}
-	ToggleHelpMsg         struct{}
-	ToggleCompactModeMsg  struct{}
-	ToggleThinkingMsg     struct{}
-	CompactMsg            struct {
+	ReloadLastPromptMsg  struct{}
+	SwitchSessionsMsg    struct{}
+	NewSessionsMsg       struct{}
+	SwitchModelMsg       struct{}
+	QuitMsg              struct{}
+	OpenFilePickerMsg    struct{}
+	ToggleHelpMsg        struct{}
+	ToggleCompactModeMsg struct{}
+	ToggleThinkingMsg    struct{}
+	ToggleYoloModeMsg    struct{}
+	CompactMsg           struct {
+		SessionID string
+	}
+	ClearContextMsg struct {
 		SessionID string
 	}
 	CommandRunCustomMsg struct {

@@ -5,11 +5,11 @@ import (
 )
 
 type KeyMap struct {
-	NewSession    key.Binding
-	AddAttachment key.Binding
-	Cancel        key.Binding
-	Tab           key.Binding
-	Details       key.Binding
+	NewSession       key.Binding
+	AddAttachment    key.Binding
+	Cancel           key.Binding
+	Tab              key.Binding
+	Details          key.Binding
 	ReloadLastPrompt key.Binding
 }
 

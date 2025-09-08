@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
@@ -168,6 +169,26 @@ func NewProvider(cfg config.ProviderConfig, opts ...ProviderClientOption) (Provi
 		model: func(tp config.SelectedModelType) catwalk.Model {
 			return *config.Get().GetModelByType(tp)
 		},
+	}
+
+	// If system prompt prefix path is provided, read from file
+	if cfg.SystemPromptPrefixPath != "" {
+		resolvedPath, err := config.Get().Resolve(cfg.SystemPromptPrefixPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve system prompt prefix path for provider %s: %w", cfg.ID, err)
+		}
+		content, err := os.ReadFile(resolvedPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read system prompt prefix file for provider %s: %w", cfg.ID, err)
+		}
+		clientOptions.systemPromptPrefix = string(content)
+		// If both path and inline prefix are provided, concatenate them
+		if cfg.SystemPromptPrefix != "" {
+			clientOptions.systemPromptPrefix = cfg.SystemPromptPrefix + "\n" + clientOptions.systemPromptPrefix
+		}
+	} else {
+		// Use inline prefix if no path is provided
+		clientOptions.systemPromptPrefix = cfg.SystemPromptPrefix
 	}
 	for _, o := range opts {
 		o(&clientOptions)

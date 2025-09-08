@@ -2,31 +2,39 @@
 
 ## Build/Test/Lint Commands
 
-- **Build**: `go build .` or `go run .`
+- **Build**: `go build .` or `task build`
+- **Run**: `go run .` or `task dev` (with profiling enabled)
+- **Install**: `task install` or `go install -v .`
 - **Test**: `task test` or `go test ./...` (run single test: `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
+- **Test with Race**: `go test -race ./...`
+- **Test with Coverage**: `go test -cover ./...`
 - **Update Golden Files**: `go test ./... -update` (regenerates .golden files when test output changes)
-  - Update specific package: `go test ./internal/tui/components/core -update` (in this case, we're updating "core")
-- **Lint**: `task lint-fix`
+  - Update specific package: `go test ./internal/tui/components/core -update`
+- **Benchmarks**: `go test -bench=. ./...`
+- **Lint**: `task lint-fix` (uses golangci-lint with gofumpt/goimports)
 - **Format**: `task fmt` (gofumpt -w .)
-- **Dev**: `task dev` (runs with profiling enabled)
+- **Generate Schema**: `task schema` (generates JSON schema for configuration)
+- **Profiling**: `task profile:cpu`, `task profile:heap`, `task profile:allocs`
 
 ## Code Style Guidelines
 
-- **Imports**: Use goimports formatting, group stdlib, external, internal packages
+- **Go Version**: 1.25.0 (minimum requirement)
+- **Imports**: Group stdlib first, then external packages, then internal packages
 - **Formatting**: Use gofumpt (stricter than gofmt), enabled in golangci-lint
 - **Naming**: Standard Go conventions - PascalCase for exported, camelCase for unexported
 - **Types**: Prefer explicit types, use type aliases for clarity (e.g., `type AgentName string`)
-- **Error handling**: Return errors explicitly, use `fmt.Errorf` for wrapping
-- **Context**: Always pass context.Context as first parameter for operations
+- **Error handling**: Return errors explicitly, use `fmt.Errorf` for wrapping with `%w` verb
+- **Context**: Always pass `context.Context` as first parameter for operations
 - **Interfaces**: Define interfaces in consuming packages, keep them small and focused
 - **Structs**: Use struct embedding for composition, group related fields
 - **Constants**: Use typed constants with iota for enums, group in const blocks
 - **Testing**: Use testify's `require` package, parallel tests with `t.Parallel()`,
   `t.SetEnv()` to set environment variables. Always use `t.Tempdir()` when in
-  need of a temporary directory. This directory does not need to be removed.
+  need of a temporary directory (no cleanup needed).
 - **JSON tags**: Use snake_case for JSON field names
 - **File permissions**: Use octal notation (0o755, 0o644) for file permissions
 - **Comments**: End comments in periods unless comments are at the end of the line.
+- **Logging**: Use `slog` for structured logging, avoid `log` package
 
 ## Testing with Mock Providers
 

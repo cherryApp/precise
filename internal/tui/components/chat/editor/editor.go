@@ -24,6 +24,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
+	"github.com/charmbracelet/crush/internal/tui/components/dialogs/editor"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/quit"
 	"github.com/charmbracelet/crush/internal/tui/styles"
@@ -97,11 +98,25 @@ type OpenEditorMsg struct {
 func (m *editorCmp) openEditor(value string) tea.Cmd {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		// Use platform-appropriate default editor
+		// Use platform-appropriate default editor, with fallbacks
+		editors := []string{}
 		if runtime.GOOS == "windows" {
-			editor = "notepad"
+			editors = []string{"notepad", "notepad.exe"}
 		} else {
-			editor = "nvim"
+			editors = []string{"nano", "vim", "vi"}
+		}
+
+		// Find first available editor
+		for _, candidate := range editors {
+			if _, err := exec.LookPath(candidate); err == nil {
+				editor = candidate
+				break
+			}
+		}
+
+		// If no editor found, return error
+		if editor == "" {
+			return util.ReportError(fmt.Errorf("no suitable editor found. Please set EDITOR environment variable"))
 		}
 	}
 
@@ -213,6 +228,18 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case OpenExternalEditorMsg:
+		if m.app.CoderAgent.IsSessionBusy(m.session.ID) {
+			return m, util.ReportWarn("Agent is working, please wait...")
+		}
+		return m, m.openEditor(m.textarea.Value())
+	case editor.EditorSelectedMsg:
+		// Set the EDITOR environment variable based on user's choice
+		if msg.Editor.Command == "custom" {
+			// For custom editor, we would need another dialog to get the command
+			// For now, just show a warning
+			return m, util.ReportWarn("Custom editor selection not yet implemented")
+		}
+		os.Setenv("EDITOR", msg.Editor.Command)
 		if m.app.CoderAgent.IsSessionBusy(m.session.ID) {
 			return m, util.ReportWarn("Agent is working, please wait...")
 		}

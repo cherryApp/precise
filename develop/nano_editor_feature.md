@@ -4,7 +4,7 @@
 Implement a new external prompt editor feature that allows users to switch between basic and nano editor for composing prompts. When activated with ctrl+n, nano opens in a full popup window that is smaller than the CLI window and uses the same popup motor as other settings dialogs.
 
 ## Current State Analysis
-- **Existing External Editor**: Already supports ctrl+o to open $EDITOR (defaults to nvim/notepad)
+- **Existing External Editor**: Already supports ctrl+e to open $EDITOR (defaults to nvim/notepad)
 - **Dialog System**: Well-established with DialogModel interface and dialogs package
 - **Editor Component**: Located in `internal/tui/components/chat/editor/`
 - **Key Bindings**: Currently ctrl+o for external editor

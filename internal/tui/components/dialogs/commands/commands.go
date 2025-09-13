@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"os"
-
 	"github.com/charmbracelet/bubbles/v2/help"
 	"github.com/charmbracelet/bubbles/v2/key"
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -12,8 +10,8 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/llm/prompt"
 	"github.com/charmbracelet/crush/internal/tui/components/chat"
-	"github.com/charmbracelet/crush/internal/tui/components/chat/editor"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
+	editordialog "github.com/charmbracelet/crush/internal/tui/components/dialogs/editor"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
 	"github.com/charmbracelet/crush/internal/tui/exp/list"
 	"github.com/charmbracelet/crush/internal/tui/styles"
@@ -367,18 +365,15 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 		}
 	}
 
-	// Add external editor command if $EDITOR is available
-	if os.Getenv("EDITOR") != "" {
-		commands = append(commands, Command{
-			ID:          "open_external_editor",
-			Title:       "Open External Editor",
-			Shortcut:    "ctrl+o",
-			Description: "Open external editor to compose message",
-			Handler: func(cmd Command) tea.Cmd {
-				return util.CmdHandler(editor.OpenExternalEditorMsg{})
-			},
-		})
-	}
+	// Always show external editor command (we'll discover editors in the dialog)
+	commands = append(commands, Command{
+		ID:          "open_external_editor",
+		Title:       "External Editor",
+		Description: "Select and open external editor",
+		Handler: func(cmd Command) tea.Cmd {
+			return util.CmdHandler(dialogs.OpenDialogMsg{Model: editordialog.NewEditorDialog()})
+		},
+	})
 
 	return append(commands, []Command{
 		{

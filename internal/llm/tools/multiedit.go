@@ -150,11 +150,11 @@ func (m *multiEditTool) Info() ToolInfo {
 func (m *multiEditTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	var params MultiEditParams
 	if err := json.Unmarshal([]byte(call.Input), &params); err != nil {
-		return NewTextErrorResponse("invalid parameters"), nil
+		return NewTextErrorResponse(fmt.Sprintf("invalid parameters: %s. Input was: %s", err.Error(), call.Input)), nil
 	}
 
 	if params.FilePath == "" {
-		return NewTextErrorResponse("file_path is required"), nil
+		return NewTextErrorResponse("file_path is required. Please specify the absolute path to the file you want to edit"), nil
 	}
 
 	if len(params.Edits) == 0 {

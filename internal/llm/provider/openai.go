@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -301,6 +302,12 @@ func (o *openaiClient) send(ctx context.Context, messages []message.Message, too
 		toolCalls := o.toolCalls(*openaiResponse)
 		finishReason := o.finishReason(string(openaiResponse.Choices[0].FinishReason))
 
+		// Check for x.ai tool calls in content if no standard tool calls found
+		if len(toolCalls) == 0 && o.isXAIModel() && content != "" {
+			xaiToolCalls := o.parseXAIToolCalls(content)
+			toolCalls = append(toolCalls, xaiToolCalls...)
+		}
+
 		if len(toolCalls) > 0 {
 			finishReason = message.FinishReasonToolUse
 		}
@@ -443,6 +450,13 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 				if len(acc.Choices[0].Message.ToolCalls) > 0 {
 					toolCalls = append(toolCalls, o.toolCalls(acc.ChatCompletion)...)
 				}
+
+				// Check for x.ai tool calls in the content if no standard tool calls found
+				if len(toolCalls) == 0 && o.isXAIModel() && currentContent != "" {
+					xaiToolCalls := o.parseXAIToolCalls(currentContent)
+					toolCalls = append(toolCalls, xaiToolCalls...)
+				}
+
 				if len(toolCalls) > 0 {
 					finishReason = message.FinishReasonToolUse
 				}
@@ -545,9 +559,121 @@ func (o *openaiClient) shouldRetry(attempts int, err error) (bool, int64, error)
 	return true, int64(retryMs), nil
 }
 
+// isXAIModel checks if the current model is an x.ai model
+func (o *openaiClient) isXAIModel() bool {
+	baseURL := o.providerOptions.baseURL
+	return strings.Contains(strings.ToLower(baseURL), "x.ai") ||
+		strings.Contains(strings.ToLower(baseURL), "xai") ||
+		strings.Contains(strings.ToLower(o.Model().ID), "grok")
+}
+
+// parseXAIToolCalls extracts tool calls from x.ai's non-standard format
+func (o *openaiClient) parseXAIToolCalls(content string) []message.ToolCall {
+	var toolCalls []message.ToolCall
+
+	// Regex to match x.ai tool calls: <xai:function_call name="toolname"> arguments
+	// Handle both closed and unclosed tags
+	re := regexp.MustCompile(`<xai:function_call\s+name="([^"]+)"\s*>\s*([^<]*)(?:</xai:function_call>|$)`)
+	matches := re.FindAllStringSubmatch(content, -1)
+
+	for i, match := range matches {
+		if len(match) >= 3 {
+			toolName := match[1]
+			rawArgs := strings.TrimSpace(match[2])
+
+			// Handle multiedit tool specifically based on the PRP example
+			if toolName == "multiedit" {
+				args := o.parseMultiEditXAIArgs(rawArgs)
+				if args != "" {
+					toolCall := message.ToolCall{
+						ID:       fmt.Sprintf("xai_call_%d", i),
+						Name:     toolName,
+						Input:    args,
+						Type:     "function",
+						Finished: true,
+					}
+					toolCalls = append(toolCalls, toolCall)
+				}
+			} else {
+				// Try to parse as JSON - if it fails, wrap it in a simple format
+				var args string
+				if json.Valid([]byte(rawArgs)) {
+					args = rawArgs
+				} else {
+					// If not valid JSON, try to extract from array-like format
+					if strings.HasPrefix(rawArgs, "[") && strings.HasSuffix(rawArgs, "]") {
+						// Handle array format like [{"new_string":"...", ...}]
+						args = rawArgs
+					} else {
+						// Fallback: wrap in quotes if it's a simple string
+						args = fmt.Sprintf(`"%s"`, rawArgs)
+					}
+				}
+
+				toolCall := message.ToolCall{
+					ID:       fmt.Sprintf("xai_call_%d", i),
+					Name:     toolName,
+					Input:    args,
+					Type:     "function",
+					Finished: true,
+				}
+				toolCalls = append(toolCalls, toolCall)
+			}
+		}
+	}
+
+	return toolCalls
+}
+
+// parseMultiEditXAIArgs specifically handles multiedit arguments from x.ai format
+func (o *openaiClient) parseMultiEditXAIArgs(rawArgs string) string {
+	// The PRP example shows: [{"new_string":"import { Component, OnInit, signal, computed, inject } from...
+	// We need to construct proper multiedit parameters
+
+	// Check if it looks like an array of edits
+	if strings.HasPrefix(rawArgs, "[") {
+		// Try to parse as JSON array directly
+		var edits []map[string]interface{}
+		if err := json.Unmarshal([]byte(rawArgs), &edits); err == nil {
+			// Successfully parsed as JSON array, now construct multiedit params
+			multiEditParams := map[string]interface{}{
+				"file_path": "", // This will need to be extracted from context or set as empty
+				"edits":     edits,
+			}
+
+			if jsonBytes, err := json.Marshal(multiEditParams); err == nil {
+				return string(jsonBytes)
+			}
+		}
+
+		// If JSON parsing failed, try to fix common issues and retry
+		fixedArgs := rawArgs
+		// Ensure the array is properly closed
+		if !strings.HasSuffix(fixedArgs, "]") {
+			fixedArgs += "]"
+		}
+
+		// Try parsing again
+		if err := json.Unmarshal([]byte(fixedArgs), &edits); err == nil {
+			multiEditParams := map[string]interface{}{
+				"file_path": "",
+				"edits":     edits,
+			}
+
+			if jsonBytes, err := json.Marshal(multiEditParams); err == nil {
+				return string(jsonBytes)
+			}
+		}
+	}
+
+	// Fallback: return as is if we can't parse it properly
+	return rawArgs
+}
+
 func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.ToolCall {
 	var toolCalls []message.ToolCall
 
+	// First try standard OpenAI tool calls
 	if len(completion.Choices) > 0 && len(completion.Choices[0].Message.ToolCalls) > 0 {
 		for _, call := range completion.Choices[0].Message.ToolCalls {
 			// accumulator for some reason does this.
@@ -562,6 +688,15 @@ func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.Too
 				Finished: true,
 			}
 			toolCalls = append(toolCalls, toolCall)
+		}
+	}
+
+	// If no standard tool calls found and this is an x.ai model, try parsing x.ai format
+	if len(toolCalls) == 0 && o.isXAIModel() && len(completion.Choices) > 0 {
+		content := completion.Choices[0].Message.Content
+		if content != "" {
+			xaiToolCalls := o.parseXAIToolCalls(content)
+			toolCalls = append(toolCalls, xaiToolCalls...)
 		}
 	}
 

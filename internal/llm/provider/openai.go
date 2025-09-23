@@ -308,6 +308,12 @@ func (o *openaiClient) send(ctx context.Context, messages []message.Message, too
 			toolCalls = append(toolCalls, xaiToolCalls...)
 		}
 
+		// Check for GLM tool calls in content if no standard tool calls found
+		if len(toolCalls) == 0 && o.isGLMModel() && content != "" {
+			glmToolCalls := o.parseGLMToolCalls(content)
+			toolCalls = append(toolCalls, glmToolCalls...)
+		}
+
 		if len(toolCalls) > 0 {
 			finishReason = message.FinishReasonToolUse
 		}
@@ -457,6 +463,12 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 					toolCalls = append(toolCalls, xaiToolCalls...)
 				}
 
+				// Check for GLM tool calls in the content if no standard tool calls found
+				if len(toolCalls) == 0 && o.isGLMModel() && currentContent != "" {
+					glmToolCalls := o.parseGLMToolCalls(currentContent)
+					toolCalls = append(toolCalls, glmToolCalls...)
+				}
+
 				if len(toolCalls) > 0 {
 					finishReason = message.FinishReasonToolUse
 				}
@@ -567,6 +579,15 @@ func (o *openaiClient) isXAIModel() bool {
 		strings.Contains(strings.ToLower(o.Model().ID), "grok")
 }
 
+// isGLMModel checks if the current model is a GLM model
+func (o *openaiClient) isGLMModel() bool {
+	baseURL := o.providerOptions.baseURL
+	modelID := strings.ToLower(o.Model().ID)
+	return strings.Contains(strings.ToLower(baseURL), "glm") ||
+		strings.Contains(modelID, "glm") ||
+		strings.Contains(modelID, "chatglm")
+}
+
 // parseXAIToolCalls extracts tool calls from x.ai's non-standard format
 func (o *openaiClient) parseXAIToolCalls(content string) []message.ToolCall {
 	var toolCalls []message.ToolCall
@@ -670,6 +691,84 @@ func (o *openaiClient) parseMultiEditXAIArgs(rawArgs string) string {
 	return rawArgs
 }
 
+// parseGLMToolCalls extracts tool calls from GLM's <think></think> and <tool_call> format
+func (o *openaiClient) parseGLMToolCalls(content string) []message.ToolCall {
+	var toolCalls []message.ToolCall
+
+	// Note: <think></think> blocks are handled for reasoning content but not extracted here
+
+	// Extract tool calls using regex with multiline support
+	// Pattern matches: <tool_call>\nname\n<arg_key>key</arg_key>\n<arg_value>value</arg_value>\n</tool_call>
+	toolCallRe := regexp.MustCompile(`(?s)<tool_call>\s*([^<\n]+).*?</tool_call>`)
+	matches := toolCallRe.FindAllStringSubmatch(content, -1)
+
+	for i, match := range matches {
+		if len(match) >= 2 {
+			toolName := strings.TrimSpace(match[1])
+
+			if toolName == "" {
+				continue
+			}
+
+			// For GLM format, we need to parse the arg_key/arg_value pairs
+			// Let's extract all arg_key/arg_value pairs from the tool_call block
+			args := o.parseGLMArgs(content, i)
+
+			toolCall := message.ToolCall{
+				ID:       fmt.Sprintf("glm_call_%d", i),
+				Name:     toolName,
+				Input:    args,
+				Type:     "function",
+				Finished: true,
+			}
+			toolCalls = append(toolCalls, toolCall)
+		}
+	}
+
+	return toolCalls
+}
+
+// parseGLMArgs extracts arguments from GLM tool call format
+func (o *openaiClient) parseGLMArgs(content string, callIndex int) string {
+	// Find all tool_call blocks including multiline content using DOTALL flag
+	toolCallRe := regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>`)
+	toolCallBlocks := toolCallRe.FindAllStringSubmatch(content, -1)
+
+	if callIndex >= len(toolCallBlocks) {
+		return "{}"
+	}
+
+	block := toolCallBlocks[callIndex][1]
+
+	// Extract arg_key/arg_value pairs with multiline support
+	argRe := regexp.MustCompile(`(?s)<arg_key>([^<]+)</arg_key>\s*<arg_value>(.*?)</arg_value>`)
+	argMatches := argRe.FindAllStringSubmatch(block, -1)
+
+	args := make(map[string]interface{})
+
+	for _, argMatch := range argMatches {
+		if len(argMatch) >= 3 {
+			key := strings.TrimSpace(argMatch[1])
+			value := strings.TrimSpace(argMatch[2])
+
+			// Try to parse value as JSON, if it fails treat as string
+			var parsedValue interface{}
+			if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
+				args[key] = parsedValue
+			} else {
+				args[key] = value
+			}
+		}
+	}
+
+	// Convert args map to JSON string
+	if jsonBytes, err := json.Marshal(args); err == nil {
+		return string(jsonBytes)
+	}
+
+	return "{}"
+}
+
 func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.ToolCall {
 	var toolCalls []message.ToolCall
 
@@ -697,6 +796,15 @@ func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.Too
 		if content != "" {
 			xaiToolCalls := o.parseXAIToolCalls(content)
 			toolCalls = append(toolCalls, xaiToolCalls...)
+		}
+	}
+
+	// If no standard tool calls found and this is a GLM model, try parsing GLM format
+	if len(toolCalls) == 0 && o.isGLMModel() && len(completion.Choices) > 0 {
+		content := completion.Choices[0].Message.Content
+		if content != "" {
+			glmToolCalls := o.parseGLMToolCalls(content)
+			toolCalls = append(toolCalls, glmToolCalls...)
 		}
 	}
 

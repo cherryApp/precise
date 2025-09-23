@@ -102,3 +102,146 @@ func TestMultiEditXAIArgsParsing(t *testing.T) {
 		assert.Equal(t, rawArgs, result)
 	})
 }
+
+func TestGLMToolCallParsing(t *testing.T) {
+	// Create a mock OpenAI client with GLM configuration
+	opts := providerClientOptions{
+		baseURL: "https://api.glm.ai/v1",
+		config: config.ProviderConfig{
+			ID: "glm",
+		},
+		model: func(config.SelectedModelType) (m catwalk.Model) {
+			return catwalk.Model{ID: "glm-4"}
+		},
+	}
+
+	client := &openaiClient{
+		providerOptions: opts,
+	}
+
+	t.Run("should detect GLM model correctly", func(t *testing.T) {
+		assert.True(t, client.isGLMModel())
+	})
+
+	t.Run("should parse basic GLM tool call", func(t *testing.T) {
+		content := `<think>
+I need to view a file to understand its contents.
+</think>
+
+<tool_call>
+view
+<arg_key>file_path</arg_key>
+<arg_value>/Volumes/Work/Dev/totaltel-manager/COMPONENTS.md</arg_value>
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 1)
+		assert.Equal(t, "view", toolCalls[0].Name)
+		assert.Equal(t, "glm_call_0", toolCalls[0].ID)
+		assert.Equal(t, "function", toolCalls[0].Type)
+		assert.True(t, toolCalls[0].Finished)
+		assert.Contains(t, toolCalls[0].Input, "file_path")
+		assert.Contains(t, toolCalls[0].Input, "/Volumes/Work/Dev/totaltel-manager/COMPONENTS.md")
+	})
+
+	t.Run("should parse GLM tool call with multiple arguments", func(t *testing.T) {
+		content := `<tool_call>
+edit
+<arg_key>file_path</arg_key>
+<arg_value>/test/file.txt</arg_value>
+<arg_key>old_string</arg_key>
+<arg_value>old content</arg_value>
+<arg_key>new_string</arg_key>
+<arg_value>new content</arg_value>
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 1)
+		assert.Equal(t, "edit", toolCalls[0].Name)
+		assert.Contains(t, toolCalls[0].Input, "file_path")
+		assert.Contains(t, toolCalls[0].Input, "old_string")
+		assert.Contains(t, toolCalls[0].Input, "new_string")
+		assert.Contains(t, toolCalls[0].Input, "/test/file.txt")
+		assert.Contains(t, toolCalls[0].Input, "old content")
+		assert.Contains(t, toolCalls[0].Input, "new content")
+	})
+
+	t.Run("should parse multiple GLM tool calls", func(t *testing.T) {
+		content := `<think>
+I need to view a file and then edit it.
+</think>
+
+<tool_call>
+view
+<arg_key>file_path</arg_key>
+<arg_value>/test1.txt</arg_value>
+</tool_call>
+
+<tool_call>
+edit
+<arg_key>file_path</arg_key>
+<arg_value>/test2.txt</arg_value>
+<arg_key>old_string</arg_key>
+<arg_value>test</arg_value>
+<arg_key>new_string</arg_key>
+<arg_value>updated</arg_value>
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 2)
+		assert.Equal(t, "view", toolCalls[0].Name)
+		assert.Equal(t, "edit", toolCalls[1].Name)
+		assert.Equal(t, "glm_call_0", toolCalls[0].ID)
+		assert.Equal(t, "glm_call_1", toolCalls[1].ID)
+	})
+
+	t.Run("should handle GLM tool call with JSON value", func(t *testing.T) {
+		content := `<tool_call>
+config
+<arg_key>settings</arg_key>
+<arg_value>{"debug": true, "port": 8080}</arg_value>
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 1)
+		assert.Equal(t, "config", toolCalls[0].Name)
+		assert.Contains(t, toolCalls[0].Input, "settings")
+		assert.Contains(t, toolCalls[0].Input, "debug")
+		assert.Contains(t, toolCalls[0].Input, "port")
+	})
+
+	t.Run("should handle GLM tool call with only think block", func(t *testing.T) {
+		content := `<think>
+Just thinking about the problem, no tool calls needed.
+</think>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 0)
+	})
+
+	t.Run("should handle empty GLM tool call", func(t *testing.T) {
+		content := `<tool_call>
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 0)
+	})
+
+	t.Run("should handle GLM tool call without args", func(t *testing.T) {
+		content := `<tool_call>
+help
+</tool_call>`
+
+		toolCalls := client.parseGLMToolCalls(content)
+
+		assert.Len(t, toolCalls, 1)
+		assert.Equal(t, "help", toolCalls[0].Name)
+		assert.Equal(t, "{}", toolCalls[0].Input)
+	})
+}

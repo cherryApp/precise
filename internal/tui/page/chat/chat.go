@@ -23,6 +23,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/chat/messages"
 	"github.com/charmbracelet/crush/internal/tui/components/chat/sidebar"
 	"github.com/charmbracelet/crush/internal/tui/components/chat/splash"
+	"github.com/charmbracelet/crush/internal/tui/components/debug"
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
@@ -67,6 +68,7 @@ type ChatPage interface {
 	util.Model
 	layout.Help
 	IsChatFocused() bool
+	GetDebugPanel() debug.Panel
 }
 
 // cancelTimerCmd creates a command that expires the cancel timer
@@ -92,11 +94,12 @@ type chatPage struct {
 	keyMap  KeyMap
 
 	// Components
-	header  header.Header
-	sidebar sidebar.Sidebar
-	chat    chat.MessageListCmp
-	editor  editor.Editor
-	splash  splash.Splash
+	header      header.Header
+	sidebar     sidebar.Sidebar
+	chat        chat.MessageListCmp
+	editor      editor.Editor
+	splash      splash.Splash
+	debugPanel  debug.Panel
 
 	// Simple state flags
 	showingDetails   bool
@@ -115,6 +118,7 @@ func New(app *app.App) ChatPage {
 		chat:        chat.New(app),
 		editor:      editor.New(app),
 		splash:      splash.New(),
+		debugPanel:  debug.NewPanel(),
 		focusedPane: PanelTypeSplash,
 	}
 }
@@ -378,6 +382,11 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, p.keyMap.Details):
 			p.toggleDetails()
 			return p, nil
+		case key.Matches(msg, p.keyMap.DebugTab):
+			if p.showingDetails {
+				p.switchDebugTab()
+			}
+			return p, nil
 		case key.Matches(msg, p.keyMap.ReloadLastPrompt):
 			return p, util.CmdHandler(util.ReloadLastPromptMsg{})
 		}
@@ -506,7 +515,7 @@ func (p *chatPage) View() string {
 		details := style.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
-				p.sidebar.View(),
+				p.debugPanel.View(),
 				version,
 			),
 		)
@@ -603,12 +612,14 @@ func (p *chatPage) SetSize(width, height int) tea.Cmd {
 			cmds = append(cmds, p.chat.SetSize(width, height-EditorHeight-HeaderHeight))
 			p.detailsWidth = width - DetailsPositioning
 			cmds = append(cmds, p.sidebar.SetSize(p.detailsWidth-LeftRightBorders, p.detailsHeight-TopBottomBorders))
+			p.debugPanel.SetSize(p.detailsWidth-LeftRightBorders, p.detailsHeight-TopBottomBorders-2) // -2 for version line
 			cmds = append(cmds, p.editor.SetSize(width, EditorHeight))
 			cmds = append(cmds, p.header.SetWidth(width-BorderWidth))
 		} else {
 			cmds = append(cmds, p.chat.SetSize(width-SideBarWidth, height-EditorHeight))
 			cmds = append(cmds, p.editor.SetSize(width, EditorHeight))
 			cmds = append(cmds, p.sidebar.SetSize(SideBarWidth, height-EditorHeight))
+			p.debugPanel.SetSize(p.detailsWidth-LeftRightBorders, p.detailsHeight-TopBottomBorders-2) // -2 for version line
 		}
 		cmds = append(cmds, p.editor.SetPosition(0, height-EditorHeight))
 	}
@@ -710,6 +721,12 @@ func (p *chatPage) sendMessage(text string, attachments []message.Attachment) te
 	if p.app.CoderAgent == nil {
 		return util.ReportError(fmt.Errorf("coder agent is not initialized"))
 	}
+
+	// Track execution start time
+	cmds = append(cmds, func() tea.Msg {
+		return util.ExecutionStartMsg{SessionID: session.ID}
+	})
+
 	_, err := p.app.CoderAgent.Run(context.Background(), session.ID, text, attachments...)
 	if err != nil {
 		return util.ReportError(err)
@@ -722,6 +739,11 @@ func (p *chatPage) Bindings() []key.Binding {
 	bindings := []key.Binding{
 		p.keyMap.NewSession,
 		p.keyMap.AddAttachment,
+	}
+
+	// Add debug tab switching binding when details are open
+	if p.showingDetails {
+		bindings = append(bindings, p.keyMap.DebugTab)
 	}
 	if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
 		cancelBinding := p.keyMap.Cancel
@@ -1060,4 +1082,19 @@ func (p *chatPage) isMouseOverChat(x, y int) bool {
 
 	// Check if mouse coordinates are within chat bounds
 	return x >= chatX && x < chatX+chatWidth && y >= chatY && y < chatY+chatHeight
+}
+
+// GetDebugPanel returns the debug panel for updating metrics
+func (p *chatPage) GetDebugPanel() debug.Panel {
+	return p.debugPanel
+}
+
+// switchDebugTab switches between metrics and logs tabs in the debug panel
+func (p *chatPage) switchDebugTab() {
+	currentTab := p.debugPanel.GetCurrentTab()
+	if currentTab == debug.TabMetrics {
+		p.debugPanel.SetTab(debug.TabLogs)
+	} else {
+		p.debugPanel.SetTab(debug.TabMetrics)
+	}
 }

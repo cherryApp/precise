@@ -93,6 +93,9 @@ type (
 		Args      map[string]string
 	}
 	CancelTimerExpiredMsg struct{}
+	ExecutionStartMsg struct {
+		SessionID string
+	}
 )
 
 func Clamp(v, low, high int) int {

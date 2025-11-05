@@ -11,6 +11,7 @@ type KeyMap struct {
 	Tab              key.Binding
 	Details          key.Binding
 	ReloadLastPrompt key.Binding
+	DebugTab         key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -38,6 +39,10 @@ func DefaultKeyMap() KeyMap {
 		ReloadLastPrompt: key.NewBinding(
 			key.WithKeys("ctrl+t"),
 			key.WithHelp("ctrl+t", "reload last prompt"),
+		),
+		DebugTab: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("shift+tab", "switch debug tab"),
 		),
 	}
 }

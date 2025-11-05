@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/llm/agent"
+	"github.com/charmbracelet/crush/internal/llm/provider"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	cmpChat "github.com/charmbracelet/crush/internal/tui/components/chat"
@@ -73,6 +74,9 @@ type appModel struct {
 
 	// Chat Page Specific
 	selectedSessionID string // The ID of the currently selected session
+
+	// Debug/Metrics tracking
+	executionStartTime map[string]time.Time // Track start time per session
 }
 
 // Init initializes the application model and returns initial commands.
@@ -184,6 +188,9 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case util.ClearContextMsg:
 		return a, a.handleClearContextConfirmed(msg.SessionID)
+	case util.ExecutionStartMsg:
+		// Track execution start time for debugging metrics
+		a.executionStartTime[msg.SessionID] = time.Now()
 	case util.QuitMsg:
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: quit.NewQuitDialog(),
@@ -265,8 +272,11 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, dialogCmd)
 		}
 
-		// Handle auto-compact logic
+		// Handle execution completion for debug metrics
 		if payload.Done && payload.Type == agent.AgentEventTypeResponse && a.selectedSessionID != "" {
+			// Update debug panel with execution metrics
+			a.updateDebugMetrics(payload)
+
 			// Get current session to check token usage
 			session, err := a.app.Sessions.Get(context.Background(), a.selectedSessionID)
 			if err == nil {
@@ -664,9 +674,83 @@ func New(app *app.App) tea.Model {
 			chat.ChatPageID: chatPage,
 		},
 
-		dialog:      dialogs.NewDialogCmp(),
-		completions: completions.New(),
+		dialog:             dialogs.NewDialogCmp(),
+		completions:        completions.New(),
+		executionStartTime: make(map[string]time.Time),
 	}
 
 	return model
+}
+
+// updateDebugMetrics updates the debug panel with execution metrics
+func (a *appModel) updateDebugMetrics(agentEvent agent.AgentEvent) {
+	sessionID := a.selectedSessionID
+	if sessionID == "" {
+		return
+	}
+
+	// Get start time
+	startTime, hasStartTime := a.executionStartTime[sessionID]
+	if !hasStartTime {
+		return
+	}
+
+	// Clean up start time tracking
+	delete(a.executionStartTime, sessionID)
+
+	endTime := time.Now()
+
+	// Get the chat page to access the debug panel
+	chatPageModel, ok := a.pages[chat.ChatPageID]
+	if !ok {
+		return
+	}
+
+	chatPage, ok := chatPageModel.(chat.ChatPage)
+	if !ok {
+		return
+	}
+
+	debugPanel := chatPage.GetDebugPanel()
+	if debugPanel == nil {
+		return
+	}
+
+	// Extract usage information from the message
+	msg := agentEvent.Message
+	var usage provider.TokenUsage
+	var cost float64
+
+	// Get session to get total tokens and cost
+	session, err := a.app.Sessions.Get(context.Background(), sessionID)
+	if err == nil {
+		usage = provider.TokenUsage{
+			InputTokens:  session.PromptTokens,
+			OutputTokens: session.CompletionTokens,
+		}
+		cost = session.Cost
+	}
+
+	// Get model info
+	model := a.app.CoderAgent.Model()
+	finishReason := string(msg.FinishReason())
+
+	// Get provider info from config
+	agentCfg := config.Get().Agents["coder"]
+	providerCfg := config.Get().GetProviderForModel(agentCfg.Model)
+	providerName := "unknown"
+	if providerCfg != nil {
+		providerName = providerCfg.ID
+	}
+
+	// Update debug metrics
+	debugPanel.GetDebugInfo().UpdateExecutionMetrics(
+		startTime,
+		endTime,
+		usage,
+		model.ID,
+		providerName,
+		finishReason,
+		cost,
+	)
 }
